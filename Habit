@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jadwal & Habit Tracker</title>
+
+<!-- Google Font -->
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+
+<style>
+    :root {
+        --bg: #ffffff;
+        --card: #f2f2f2;
+        --text: #222;
+        --accent: #4a6cf7;
+    }
+    [data-theme="dark"] {
+        --bg: #121212;
+        --card: #1e1e1e;
+        --text: #eaeaea;
+        --accent: #7b9bff;
+    }
+    body {
+        margin: 0;
+        padding: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: 'Poppins', sans-serif;
+    }
+    header {
+        padding: 15px 25px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: var(--card);
+        position: sticky;
+        top: 0;
+        z-index: 5;
+    }
+    .container {
+        padding: 20px;
+        max-width: 900px;
+        margin: auto;
+    }
+    h2 {
+        border-left: 5px solid var(--accent);
+        padding-left: 10px;
+    }
+    .card {
+        background: var(--card);
+        padding: 15px;
+        margin: 15px 0;
+        border-radius: 8px;
+    }
+    input, select {
+        width: 100%;
+        padding: 10px;
+        margin: 8px 0;
+        border-radius: 6px;
+        border: 1px solid #ccc;
+        background: var(--bg);
+        color: var(--text);
+    }
+    button {
+        padding: 10px 15px;
+        background: var(--accent);
+        color: white;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+    }
+    .task {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin: 8px 0;
+        padding: 10px;
+        background: var(--bg);
+        border-radius: 6px;
+        border-left: 4px solid var(--accent);
+    }
+    .task.done {
+        opacity: 0.6;
+        text-decoration: line-through;
+    }
+    .task button {
+        background: #f44336;
+        padding: 5px 10px;
+    }
+    .edit-btn {
+        background: #ffa726 !important;
+        margin-right: 5px;
+    }
+    canvas {
+        width: 100%;
+        background: var(--card);
+        padding: 15px;
+        border-radius: 10px;
+    }
+    .mode-toggle {
+        cursor: pointer;
+        background: var(--accent);
+        padding: 6px 12px;
+        border-radius: 6px;
+        color: white;
+    }
+</style>
+</head>
+
+<body>
+
+<header>
+    <h2>Planner & Habit Tracker</h2>
+    <div class="mode-toggle" onclick="toggleTheme()">🌗 Mode</div>
+</header>
+
+<div class="container">
+
+    <!-- Form Tambah Tugas -->
+    <div class="card">
+        <h3>Tambah Jadwal / Habit</h3>
+        <select id="type">
+            <option value="Harian">Harian</option>
+            <option value="Mingguan">Mingguan</option>
+            <option value="Bulanan">Bulanan</option>
+        </select>
+        <input type="text" id="taskName" placeholder="Nama tugas / habit">
+        <input type="time" id="taskTime">
+        <button onclick="addTask()">Tambah</button>
+    </div>
+
+    <!-- Daftar -->
+    <div class="card">
+        <h3>Daftar Tugas</h3>
+        <div id="taskList"></div>
+    </div>
+
+    <!-- Grafik -->
+    <div class="card">
+        <h3>Perkembangan Habit (30 hari)</h3>
+        <canvas id="habitChart"></canvas>
+    </div>
+
+</div>
+
+<!-- ChartJS -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+/* -----------------------------------------
+   Local Storage
+--------------------------------------------*/
+let tasks = JSON.parse(localStorage.getItem("tasks") || "[]");
+let habitData = JSON.parse(localStorage.getItem("habitData") || "[]");
+
+if (habitData.length === 0) {
+    habitData = new Array(30).fill(0);
+}
+
+/* -----------------------------------------
+   Dark / Light Mode
+--------------------------------------------*/
+function toggleTheme() {
+    const current = document.documentElement.getAttribute("data-theme");
+    const newTheme = current === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", newTheme);
+    localStorage.setItem("theme", newTheme);
+}
+document.documentElement.setAttribute("data-theme", localStorage.getItem("theme") || "light");
+
+/* -----------------------------------------
+   Add Task
+--------------------------------------------*/
+function addTask() {
+    const name = document.getElementById("taskName").value;
+    const type = document.getElementById("type").value;
+    const time = document.getElementById("taskTime").value;
+
+    if (!name) return alert("Nama tugas harus diisi!");
+
+    tasks.push({ name, type, time, done: false });
+    save();
+    render();
+}
+
+/* -----------------------------------------
+   Save to Local Storage
+--------------------------------------------*/
+function save() {
+    localStorage.setItem("tasks", JSON.stringify(tasks));
+    localStorage.setItem("habitData", JSON.stringify(habitData));
+}
+
+/* -----------------------------------------
+   Render List
+--------------------------------------------*/
+function render() {
+    const list = document.getElementById("taskList");
+    list.innerHTML = "";
+
+    tasks.forEach((t, i) => {
+        const div = document.createElement("div");
+        div.className = "task" + (t.done ? " done" : "");
+
+        div.innerHTML = `
+            <div>
+                <input type="checkbox" ${t.done ? "checked" : ""} onchange="toggleDone(${i})">
+                <strong>${t.name}</strong><br>
+                <small>${t.type} • ${t.time || "-"}</small>
+            </div>
+
+            <div>
+                <button class="edit-btn" onclick="editTask(${i})">Edit</button>
+                <button onclick="deleteTask(${i})">X</button>
+            </div>
+        `;
+        list.appendChild(div);
+    });
+}
+
+/* -----------------------------------------
+   Toggle Done → masuk grafik
+--------------------------------------------*/
+function toggleDone(i) {
+    tasks[i].done = !tasks[i].done;
+
+    if (tasks[i].done) {
+        // setiap centang → naik grafik hari ini
+        habitData[habitData.length - 1]++;
+    }
+
+    save();
+    render();
+    chart.update();
+}
+
+/* -----------------------------------------
+   Edit Task
+--------------------------------------------*/
+function editTask(i) {
+    const newName = prompt("Edit nama:", tasks[i].name);
+    if (newName) tasks[i].name = newName;
+    save();
+    render();
+}
+
+/* -----------------------------------------
+   Delete Task
+--------------------------------------------*/
+function deleteTask(i) {
+    if (confirm("Hapus tugas ini?")) {
+        tasks.splice(i, 1);
+        save();
+        render();
+    }
+}
+
+/* -----------------------------------------
+   ChartJS Setup
+--------------------------------------------*/
+const ctx = document.getElementById('habitChart');
+const chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+        labels: [...Array(30).keys()].map(x => x + 1),
+        datasets: [{
+            label: 'Progress Habit',
+            data: habitData,
+            borderColor: '#4a6cf7',
+            borderWidth: 2,
+            fill: false
+        }]
+    },
+    options: {
+        responsive: true
+    }
+});
+
+/* Render on Load */
+render();
+</script>
+
+</body>
+</html>
